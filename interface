@@ -1,0 +1,85 @@
+library(shiny)
+
+# Define UI for the application
+ui <- fluidPage(
+  
+  
+  # Application title
+  titlePanel("ISO 9001 TUR Simulation"),
+  
+  # Sidebar with input controls
+  sidebarLayout(
+    sidebarPanel(
+      numericInput("coverage_factor", "Coverage factor:", 2),
+      numericInput("uncertainty", "Measurement Uncertainty:", 1),
+      numericInput("target", "Calibration Result:", 0),
+      numericInput("low_limit", "Low Limit:", -5),
+      numericInput("high_limit", "High Limit:", 5),
+      numericInput("frequency", "Frequency count:", 100, min = 1),
+      actionButton("simulate", "Simulate")
+    ),
+    
+    # Main panel to display the histogram, table, TUR, and explanations
+    mainPanel(
+      plotOutput("histogram"),
+      tableOutput("data_table"),
+      textOutput("tur_output"),
+      tags$hr(),
+      tags$h4("Histogram Explanation"),
+      tags$p("The histogram displays the outcomes of multiple calibration simulations with the incorporated uncertainty. Each iteration of the simulation demonstrates the range of possible results that may occur during the calibration process. The lower and upper limit tolerance lines represent the tolerance boundaries of the equipment being calibrated, illustrating the acceptable range for the calibration results."),
+      tags$h4("Test Uncertainty Ratio (TUR) Explanation"),
+      tags$p("The Test Uncertainty Ratio (TUR) is a measure of the confidence in a measurement system. It is the ratio of the tolerance (the difference between the high limit and the low limit) to the measurement uncertainty. A higher TUR indicates a more precise measurement system. In general, a TUR of 4 or greater is considered acceptable.")
+    )
+    
+  )
+)
+
+# Define server logic for the application
+server <- function(input, output) {
+  
+  # Function to simulate data based on input parameters
+  simulate_data <- function(coverage_factor, uncertainty, target, frequency) {
+    simulated_data <- rnorm(frequency, target, uncertainty / coverage_factor)
+    return(simulated_data)
+  }
+  
+  # Calculate Test Uncertainty Ratio (TUR) based on low limit, high limit, and uncertainty
+  calculate_tur <- function(low_limit, high_limit, uncertainty) {
+    tolerance <- high_limit - low_limit
+    tur <- tolerance / (2 * uncertainty)
+    return(tur)
+  }
+  
+  # Reactive expression to generate simulated data
+  simulated_data <- eventReactive(input$simulate, {
+    simulate_data(input$coverage_factor, input$uncertainty, input$target, input$frequency)
+  }, ignoreNULL = FALSE)
+  
+  # Reactive expression to calculate TUR
+  tur <- reactive({
+    calculate_tur(input$low_limit, input$high_limit, input$uncertainty)
+  })
+  
+  # Render the histogram
+  output$histogram <- renderPlot({
+    data <- simulated_data()
+    hist_xlim <- range(c(data, input$low_limit, input$high_limit)) # Including low limit and high limit
+    hist(data, main = "Measurement Uncertainty vs Equipment Tolerance",
+         xlab = "Calibration Simulated Results", ylab = "Simulation Counts", col = "lightblue", border = "black",
+         xlim = hist_xlim) # Set x limits based on the data range, including low and high limits
+    
+    # Add vertical lines for Low Limit and High Limit
+    abline(v = input$low_limit, col = "red", lwd = 2, lty = 2)
+    abline(v = input$high_limit, col = "blue", lwd = 2, lty = 2)
+  })
+  
+  
+  
+  # Render the TUR output
+  output$tur_output <- renderText({
+    paste("Test Uncertainty Ratio (TUR):", format(round(tur(), 2), nsmall = 2))
+  })
+}
+
+# Run the Shiny app
+shinyApp(ui = ui, server = server, options = list(height = 1000))
